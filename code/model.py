@@ -18,8 +18,8 @@ class MLP(nn.Module):
                                  nn.Linear(hidden_size, out_size),
                                  nn.Sigmoid())
         
-        def forward(input):
-            return self.net(input)
+    def forward(self, input):
+        return self.net(input)
       
         
 class LSTM(nn.Module):
@@ -37,7 +37,7 @@ class LSTM(nn.Module):
         self.linear = nn.Sequential(nn.Dropout(hidden_dpout), nn.Linear(hidden_size, out_size), nn.Sigmoid())
         
         
-        def forward(input):
-            out = nn.Dropout(in_dpout)
-            outputs, _ = self.lstm(out)
-            return self.linear(outputs)
+    def forward(self, input):
+        out = nn.Dropout(self.in_dpout)
+        outputs, _ = self.lstm(out)
+        return self.linear(outputs)
