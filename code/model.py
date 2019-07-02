@@ -6,7 +6,7 @@ class MLP(nn.Module):
     def __init__(self, config):
         super(MLP, self).__init__()
         in_size = config['in_size']
-        hidden_size = config['hidden_size']
+        hidden_size = config['hidden_dims']
         out_size = config['out_size']
         in_dpout = config['in_dpout']
         hidden_dpout = config['hidden_dpout']

@@ -188,6 +188,7 @@ class DATASET():
         #     self.valid_indices += list(range(self.user_sizes[u_id], self.user_sizes[u_id] + self.user_sizes[u_id+1]-self.seq_len+1))
         
         #########  Making sure we have no missing timesteps in a sequence (of length seq_len)  ################# 
+        print("\nCalculating missing timesteps..")
         self.valid_indices = list(range(sum(self.user_sizes) - self.seq_len + 1))
         self.continuous_timestamps = ((self.timestamps[1:] - self.timestamps[:-1]) <= 120)
               
@@ -208,6 +209,7 @@ class DATASET():
         self.label_count = self.Y.shape[1]
         
         ######## Apply instance weighting for unbalanced classes #########
+        print("Calculating Instance weighting...")
         self.pos_label_per_class = np.sum(self.Y * (1 - self.M), axis=0)
         self.neg_label_per_class = np.sum((1-self.Y) * (1 - self.M), axis=0)
         self.pos_weights = 1 / (2 * (self.pos_label_per_class /(1 - self.M).sum(axis=0)))  # Inverse ratio of (valid)positive class examples to the total valid class examples
@@ -222,8 +224,8 @@ class DATASET():
         
     def get_batch(self, batch_size):
         batch_x = np.zeros((batch_size, self.seq_len, self.feature_count))
-        batch_y = np.zeros((batch_size, self.seq_len, self.feature_count))
-        batch_inst_wts = np.zeros((batch_size, self.seq_len, self.feature_count))
+        batch_y = np.zeros((batch_size, self.seq_len, self.label_count))
+        batch_inst_wts = np.zeros((batch_size, self.seq_len, self.label_count))
          
         for i in range(batch_size):
             index_pos = self.valid_indices[self.current_pos]
