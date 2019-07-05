@@ -31,13 +31,14 @@ class LSTM(nn.Module):
         in_dpout = config['in_dpout']
         hidden_dpout = config['hidden_dpout']
         
-        hid_size = hidden_size if not config['bidirectional'] else int(hidden_size/2)
+        hid_size = hidden_size if not bidir else int(hidden_size/2)
         
+        self.input_droput = nn.Dropout(in_dpout)
         self.lstm = nn.LSTM(in_size, hid_size, bidirectional=bidir, batch_first=True)
         self.linear = nn.Sequential(nn.Dropout(hidden_dpout), nn.Linear(hidden_size, out_size), nn.Sigmoid())
         
         
     def forward(self, input):
-        out = nn.Dropout(self.in_dpout)
+        out = self.input_droput(input)
         outputs, _ = self.lstm(out)
         return self.linear(outputs)

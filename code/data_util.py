@@ -9,6 +9,9 @@ from glob import glob
 from tqdm import tqdm
 from random import shuffle
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 # BASE_DATA_DIR = '../Sem 2 block 3/MLQS/Assignment/ML4QS/PythonCode/data/assgn3_data/interpolation'
 BASE_DATA_DIR = 'C:/Users/asus/Desktop/MS in AI/Sem 2/Sem 2 block 3/MLQS/Assignment/ML4QS/PythonCode/data/assgn3_data/interpolation'
 
@@ -28,71 +31,71 @@ FEATURES_TO_REMOVE = ['discrete:wifi_status:is_not_reachable', 'discrete:wifi_st
     
     
 def parse_header_of_csv(csv_str):
-	# Isolate the headline columns:
-	headline = csv_str[:csv_str.index(b'\n')]
-	columns = headline.split(b',')
+    # Isolate the headline columns:
+    headline = csv_str[:csv_str.index(b'\n')]
+    columns = headline.split(b',')
 
-	# print(columns)
-	# The first column should be timestamp:
-	# assert columns[0] == b'timestamp'
-	# The last column should be label_source:
-	assert columns[-1].startswith(b'label_source')
-	
-	# Search for the column of the first label:
-	for (ci,col) in enumerate(columns):
-		if col.startswith(b'label:'):
-			first_label_ind = ci
-			break
-		pass
+    # print(columns)
+    # The first column should be timestamp:
+    # assert columns[0] == b'timestamp'
+    # The last column should be label_source:
+    assert columns[-1].startswith(b'label_source')
+    
+    # Search for the column of the first label:
+    for (ci,col) in enumerate(columns):
+        if col.startswith(b'label:'):
+            first_label_ind = ci
+            break
+        pass
 
-	# Feature columns come after timestamp and before the labels:
-	feature_names = columns[1:first_label_ind]
-	# Then come the labels, till the one-before-last column:
-	label_names = columns[first_label_ind:-1]
-	for (li,label) in enumerate(label_names):
-		# In the CSV the label names appear with prefix 'label:', but we don't need it after reading the data:
-		assert label.startswith(b'label:')
-		label_names[li] = label.replace(b'label:',b'')
-		pass
-	
-	return (feature_names,label_names)
+    # Feature columns come after timestamp and before the labels:
+    feature_names = columns[1:first_label_ind]
+    # Then come the labels, till the one-before-last column:
+    label_names = columns[first_label_ind:-1]
+    for (li,label) in enumerate(label_names):
+        # In the CSV the label names appear with prefix 'label:', but we don't need it after reading the data:
+        assert label.startswith(b'label:')
+        label_names[li] = label.replace(b'label:',b'')
+        pass
+    
+    return (feature_names,label_names)
 
 def parse_body_of_csv(csv_str,n_features):
-	# Read the entire CSV body into a single numeric matrix:
-	# full_table = np.loadtxt(io.BytesIO(csv_str),delimiter=',',skiprows=1)
-	full_table = np.genfromtxt(BytesIO(csv_str),delimiter=',')
-	
-	# Timestamp is the primary key for the records (examples):
-	timestamps = full_table[:,0].astype(int)
-	
-	# Read the sensor features:
-	X = full_table[:,1:(n_features+1)]
-	
-	# Read the binary label values, and the 'missing label' indicators:
-	trinary_labels_mat = full_table[:,(n_features+1):-1] # This should have values of either 0., 1. or NaN
-	M = np.isnan(trinary_labels_mat) # M is the missing label matrix
-	Y = np.where(M,0,trinary_labels_mat) > 0. # Y is the label matrix
-	
-	return (X,Y,M,timestamps)
+    # Read the entire CSV body into a single numeric matrix:
+    # full_table = np.loadtxt(io.BytesIO(csv_str),delimiter=',',skiprows=1)
+    full_table = np.genfromtxt(BytesIO(csv_str),delimiter=',')
+    
+    # Timestamp is the primary key for the records (examples):
+    timestamps = full_table[:,0].astype(int)
+    
+    # Read the sensor features:
+    X = full_table[:,1:(n_features+1)]
+    
+    # Read the binary label values, and the 'missing label' indicators:
+    trinary_labels_mat = full_table[:,(n_features+1):-1] # This should have values of either 0., 1. or NaN
+    M = np.isnan(trinary_labels_mat) # M is the missing label matrix
+    Y = np.where(M,0,trinary_labels_mat) > 0. # Y is the label matrix
+    
+    return (X,Y,M,timestamps)
 
 '''
 Read the data (precomputed sensor-features and labels) for a user.
 This function assumes the user's data file is present.
 '''
 def read_user_data(uuid):
-	# user_data_file = '../data/%s.features_labels.csv.gz' % uuid
-	user_data_file = BASE_DATA_DIR + '/%s.features_labels.csv.gz' % uuid
+    # user_data_file = '../data/%s.features_labels.csv.gz' % uuid
+    user_data_file = BASE_DATA_DIR + '/%s.features_labels.csv.gz' % uuid
 
-	# Read the entire csv file of the user:
-	with gzip.open(user_data_file,'rb') as fid:
-		csv_str = fid.read()
-		pass
+    # Read the entire csv file of the user:
+    with gzip.open(user_data_file,'rb') as fid:
+        csv_str = fid.read()
+        pass
 
-	(feature_names,label_names) = parse_header_of_csv(csv_str)
-	n_features = len(feature_names)
-	(X,Y,M,timestamps) = parse_body_of_csv(csv_str,n_features)
+    (feature_names,label_names) = parse_header_of_csv(csv_str)
+    n_features = len(feature_names)
+    (X,Y,M,timestamps) = parse_body_of_csv(csv_str,n_features)
 
-	return (X,Y,M,timestamps,feature_names,label_names)
+    return (X,Y,M,timestamps,feature_names,label_names)
 
 
 
@@ -176,6 +179,7 @@ class DATASET():
         self.prepare_data(normalize_features, instance_weight_exp=instance_weight_exp)
         
     def prepare_data(self, normalize_features, instance_weight_exp=0.5):
+        self.start_users = np.cumsum(np.array([0] + [x.shape[0] for x in self.X]))
         self.user_sizes = [x.shape[0] for x in self.X]
         self.user_sizes.insert(0,0)
         self.X = np.concatenate(self.X, axis=0)
@@ -212,8 +216,10 @@ class DATASET():
         print("Calculating Instance weighting...")
         self.pos_label_per_class = np.sum(self.Y * (1 - self.M), axis=0)
         self.neg_label_per_class = np.sum((1-self.Y) * (1 - self.M), axis=0)
-        self.pos_weights = 1 / (2 * (self.pos_label_per_class /(1 - self.M).sum(axis=0)))  # Inverse ratio of (valid)positive class examples to the total valid class examples
-        self.neg_weights = 1 / (2 * (self.neg_label_per_class /(1 - self.M).sum(axis=0)))  # Inverse ratio of (valid)negative class examples to the total valid class examples
+        self.pos_weights = (1 - self.M).sum(axis=0) / 2 / (self.pos_label_per_class + 1e-5)
+        self.neg_weights = (1 - self.M).sum(axis=0) / 2 / (self.neg_label_per_class + 1e-5)
+        # self.pos_weights = 1 / (2 * (self.pos_label_per_class /(1 - self.M).sum(axis=0)))  # Inverse ratio of (valid)positive class examples to the total valid class examples
+        # self.neg_weights = 1 / (2 * (self.neg_label_per_class /(1 - self.M).sum(axis=0)))  # Inverse ratio of (valid)negative class examples to the total valid class examples
         self.pos_weights = np.power(self.pos_weights, instance_weight_exp)
         self.neg_weights = np.power(self.neg_weights, instance_weight_exp)
         
@@ -237,9 +243,38 @@ class DATASET():
             batch_x[i,:,:] = self.X[index_pos : index_pos + self.seq_len,:]
             batch_y[i,:,:] = self.Y[index_pos : index_pos + self.seq_len,:]
             batch_inst_wts = (1 - self.M[index_pos : index_pos + self.seq_len,:]) * (batch_y[i,:,:]) * (self.pos_weights) + (1 - batch_y[i,:,:]) * self.neg_weights
+            
+        # Convert to torch Tensors
+        batch_x, batch_y, batch_inst_wts = torch.Tensor(batch_x).to(device), torch.Tensor(batch_y).to(device), torch.Tensor(batch_inst_wts).to(device)
              
         
         return batch_x, batch_y, batch_inst_wts
+    
+    
+    
+    def get_whole_dataset(self, min_seq_len=20):
+        batch_data = list()
+        batch_labels = list()
+        batch_weights = list()
+        for i in range(self.start_users.shape[0]-1):
+            start_ind = self.start_users[i]
+            for user_ind in range(self.start_users[i], self.start_users[i+1]-1):
+                if self.continuous_timestamps[user_ind] == 0:
+                    if (user_ind - start_ind) > min_seq_len:
+                        batch_data.append(self.X[None, start_ind:user_ind+1, :].astype(np.float32))
+                        batch_labels.append(self.Y[None, start_ind:user_ind+1, :].astype(np.float32))
+                        batch_weights.append(1 - self.M[None, start_ind:user_ind+1, :].astype(np.float32))
+                    start_ind = user_ind+1    
+            if (self.start_users[i+1] - start_ind) > min_seq_len:
+                batch_data.append(self.X[None, start_ind:self.start_users[i+1], :].astype(np.float32))
+                batch_labels.append(self.Y[None, start_ind:self.start_users[i+1], :].astype(np.float32))
+                batch_weights.append(1 - self.M[None, start_ind:self.start_users[i+1], :].astype(np.float32))
+        
+        batch_data = [torch.Tensor(b).to(device) for b in batch_data]
+        batch_labels = [torch.Tensor(b).to(device) for b in batch_labels]
+        batch_weights = [torch.Tensor(b).to(device) for b in batch_weights]
+
+        return batch_data, batch_labels, batch_weights
         
 
 
